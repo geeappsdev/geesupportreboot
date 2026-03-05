@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 
 <meta charset="UTF-8">
@@ -8,15 +9,30 @@
 <title>Gee Support AI</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <style>
+
 body{
 background:#0f172a;
 }
+
+.prose h1{font-size:1.6rem;font-weight:bold;margin-top:12px}
+.prose h2{font-size:1.4rem;font-weight:bold;margin-top:12px}
+.prose h3{font-size:1.2rem;font-weight:bold;margin-top:12px}
+
+.prose ul{list-style:disc;margin-left:20px}
+.prose ol{list-style:decimal;margin-left:20px}
+
+.prose a{
+color:#2563eb;
+text-decoration:underline
+}
+
 </style>
 
 </head>
@@ -29,274 +45,349 @@ background:#0f172a;
 
 const {useState}=React
 
+/* ======================
+ALLOWED STRIPE DOMAINS
+====================== */
+
+const allowedDomains=[
+"docs.stripe.com",
+"support.stripe.com",
+"stripe.com",
+"dashboard.stripe.com"
+]
 
 
-const FORMAT_TEMPLATES={
+/* ======================
+STRIPE DOC FALLBACK LIBRARY
+====================== */
+
+const fallbackDocs=[
+
+"https://docs.stripe.com/payments/accept-a-payment",
+"https://docs.stripe.com/refunds",
+"https://docs.stripe.com/disputes",
+"https://docs.stripe.com/webhooks",
+"https://docs.stripe.com/declines",
+"https://docs.stripe.com/payments/checkout",
+"https://docs.stripe.com/billing/subscriptions",
+"https://docs.stripe.com/connect",
+"https://docs.stripe.com/tax",
+"https://docs.stripe.com/invoicing"
+
+]
+
+
+
+/* ======================
+KEYWORD EXTRACTION
+====================== */
+
+function extractKeywords(text){
+
+text=text.toLowerCase()
+
+const keywords=[]
+
+if(text.includes("webhook")) keywords.push("webhook")
+
+if(text.includes("dispute")) keywords.push("dispute evidence")
+
+if(text.includes("refund")) keywords.push("refund payment")
+
+if(text.includes("subscription")) keywords.push("stripe subscription")
+
+if(text.includes("checkout")) keywords.push("stripe checkout")
+
+if(text.includes("decline")) keywords.push("stripe decline")
+
+if(text.includes("connect")) keywords.push("stripe connect")
+
+if(text.includes("tax")) keywords.push("stripe tax")
+
+if(text.includes("invoice")) keywords.push("stripe invoice")
+
+if(text.includes("paymentintent")) keywords.push("stripe payment intent")
+
+return keywords
+
+}
+
+
+
+/* ======================
+STRIPE SEARCH QUERY
+====================== */
+
+function buildSearchQueries(keywords){
+
+const queries=[]
+
+keywords.forEach(k=>{
+
+queries.push(`site:docs.stripe.com ${k}`)
+
+queries.push(`site:support.stripe.com ${k}`)
+
+})
+
+return queries
+
+}
+
+
+
+/* ======================
+DOMAIN VALIDATION
+====================== */
+
+function isStripeLink(url){
+
+try{
+
+const domain=new URL(url).hostname
+
+return allowedDomains.some(d=>domain.includes(d))
+
+}catch{
+
+return false
+
+}
+
+}
+
+
+
+/* ======================
+LINK VALIDATION
+====================== */
+
+function filterStripeLinks(links){
+
+return links.filter(l=>isStripeLink(l))
+
+}
+
+
+
+/* ======================
+TEMPLATES
+====================== */
+
+const templates={
 
 EMAIL:`
-**SUMMARY**
+## Summary
 
-**ANALYSIS**
+## Already know
 
-**Steps I took**
-1.
-2.
+## Need to know
 
-**Already know**
+## To do
 
-**Need to know**
+## Outcome Summary
 
-**To do**
+## DSAT analysis
 
-**Outcome Summary**
+## Distressed user analysis
 
-**DSAT analysis**
+## Information the reply must include
 
-**Distressed User Analysis**
+## Resources used
 
-**Information the reply must include**
-•
+- Stripe documentation links here
 
-**Resources used**
-•
+---
 
-**Email Response**
+## Email Draft
 
 Hi there,
 
-Best, {alias}
+Best,
+{alias}
 `,
 
 CHAT:`
-**Summary of the issue**
+## Summary of the issue
 
-**Steps I took**
+## Steps I took
+
 1.
 2.
 
-**Consult**
+## Consult
 NA
 
-**Relevant object IDs**
+## Relevant Objects
 NA
 
-**Final outcome**
+## Final outcome
 
-**Speculation**
+## Speculations
 
-**Why case open/pending**
+## Why case open/pending
 
-**Distressed User Analysis**
+## Distressed user analysis
 
-**What triggered dissatisfaction**
+## What triggered dissatisfaction
 
-**Relevant documents**
+## Relevant Stripe resources
 `,
 
 INVESTIGATION:`
-Consent to record: NA
-Authentication method: NA
-User account type: NA
-Account ID: NA
+Consent to record: NA  
+Authentication method: NA  
+User account type: NA  
+Account ID: NA  
 
-Checked related cases? YES
-Read entire thread? YES
+Checked related cases? YES  
+Read entire thread? YES  
 
-**User concerns**
+## User concerns
 
-**Summary of the issue**
+## Summary of the issue
 
-**Steps I took**
+## Steps I took
+
 1.
 2.
 
-**Check Lumos**
+## Check Lumos
 NA
 
-**Check Confluence**
+## Check Confluence
 NA
 
-**Public documentation used**
-•
+## Public documents used
 
-**Dashboard link**
+## Dashboard link
 NA
 
-**Final Outcome**
+## Final outcome
 
-**Why case open/pending**
+## Why case open/pending
 
-**Distressed User Analysis**
+## Distressed User
 
-**Information the reply must include**
-•
-`,
-
-SUMMARY:`
-**Summary of the issue**
-
-Case link: NA
-Case ID: NA
-Account ID: NA
-Platform Account ID: NA
-Connected Account ID: NA
-
-**Speculation**
-
-**What can I tell the user?**
-
-**Relevant Stripe resources**
-•
-
-**Relevant IDs**
-`,
-
-CONSULT:`
-Consult Department:
-
-Ticket Link: NA
-
-Object/Account IDs:
-
-User issue Summary:
-
-Your Investigation:
-
-Speculation:
+## Information the reply must include
 `
 
 }
 
 
 
-function detectStripeIDs(text){
-
-const patterns=[
-/acct_[A-Za-z0-9]+/g,
-/pi_[A-Za-z0-9]+/g,
-/ch_[A-Za-z0-9]+/g,
-/cus_[A-Za-z0-9]+/g,
-/evt_[A-Za-z0-9]+/g,
-/tr_[A-Za-z0-9]+/g,
-/po_[A-Za-z0-9]+/g,
-/in_[A-Za-z0-9]+/g,
-/sub_[A-Za-z0-9]+/g,
-/pm_[A-Za-z0-9]+/g,
-/seti_[A-Za-z0-9]+/g,
-/cs_[A-Za-z0-9]+/g,
-/price_[A-Za-z0-9]+/g,
-/prod_[A-Za-z0-9]+/g
-]
-
-let ids=[]
-
-patterns.forEach(p=>{
-const m=text.match(p)
-if(m){ids.push(...m)}
-})
-
-return [...new Set(ids)]
-
-}
-
-
-
-function detectStripeProduct(text){
-
-text=text.toLowerCase()
-
-if(text.includes("subscription")||text.includes("invoice")) return "Billing"
-if(text.includes("connect")||text.includes("platform")) return "Connect"
-if(text.includes("webhook")) return "Webhooks"
-if(text.includes("checkout")) return "Checkout"
-if(text.includes("fraud")||text.includes("dispute")) return "Radar"
-if(text.includes("tax")) return "Tax"
-if(text.includes("identity")) return "Identity"
-if(text.includes("terminal")) return "Terminal"
-if(text.includes("payment")||text.includes("charge")) return "Payments"
-
-return "General API"
-
-}
-
-
+/* ======================
+APP
+====================== */
 
 function App(){
 
-const [apiKey,setApiKey]=useState(localStorage.getItem("geminiKey")||"")
-const [alias,setAlias]=useState(localStorage.getItem("alias")||"")
-const [context,setContext]=useState("")
-const [output,setOutput]=useState("")
-const [loading,setLoading]=useState(false)
+const[context,setContext]=useState("")
+const[output,setOutput]=useState("")
+const[alias,setAlias]=useState(localStorage.getItem("alias")||"")
+const[apiKey,setApiKey]=useState(localStorage.getItem("geminiKey")||"")
+const[loading,setLoading]=useState(false)
 
 
 
-function save(){
+function saveSettings(){
 
-localStorage.setItem("geminiKey",apiKey)
 localStorage.setItem("alias",alias)
+localStorage.setItem("geminiKey",apiKey)
 
-alert("Settings saved")
+alert("Saved")
 
 }
 
 
+
+/* ======================
+SMART LINK ENGINE
+====================== */
+
+function generateStripeLinks(){
+
+const keywords=extractKeywords(context)
+
+const queries=buildSearchQueries(keywords)
+
+let links=[]
+
+queries.forEach(q=>{
+
+links.push(`https://www.google.com/search?q=${encodeURIComponent(q)}`)
+
+})
+
+links=filterStripeLinks(links)
+
+if(links.length===0){
+
+links=fallbackDocs
+
+}
+
+return links
+
+}
+
+
+
+/* ======================
+AI GENERATION
+====================== */
 
 async function generate(type){
 
-if(!apiKey){
-alert("Enter Gemini API key")
-return
-}
-
-if(!context.trim()){
-alert("Enter case context")
-return
-}
-
 setLoading(true)
 
-const ids=detectStripeIDs(context)
-const product=detectStripeProduct(context)
+const stripeLinks=generateStripeLinks()
 
-const template=FORMAT_TEMPLATES[type].replace("{alias}",alias||"Agent")
+const template=templates[type].replace("{alias}",alias)
 
 const prompt=`
 
-You are a Stripe support documentation AI.
-
-Agent alias: ${alias}
-
-Stripe product detected:
-${product}
-
-Detected Stripe IDs:
-${ids.length?ids.join(", "):"NA"}
+You are a Stripe support assistant.
 
 CASE CONTEXT
 ${context}
 
-Fill the template below.
+Stripe documentation links discovered:
+
+${stripeLinks.join("\n")}
 
 Rules:
 
-Do not modify headings.
-Do not remove sections.
-Fill all sections concisely.
+Use Stripe links relevant to the issue.
 
-Template:
+Allowed domains:
+
+docs.stripe.com
+support.stripe.com
+stripe.com
+
+Do not invent links.
+
+Fill the template below.
+
 ${template}
 
 `
 
-const response=await fetch(
+const res=await fetch(
+
 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+
 {
+
 method:"POST",
+
 headers:{
 "Content-Type":"application/json"
 },
+
 body:JSON.stringify({
+
 contents:[
 {
 parts:[
@@ -304,29 +395,34 @@ parts:[
 ]
 }
 ]
+
 })
+
 }
+
 )
 
-const data=await response.json()
+const data=await res.json()
 
-let text="AI generation failed"
+let text="Generation failed"
 
 if(data.candidates){
+
 text=data.candidates[0].content.parts.map(p=>p.text).join("")
+
 }
 
 setOutput(text)
+
 setLoading(false)
 
 }
 
 
 
-const ids=detectStripeIDs(context)
-const product=detectStripeProduct(context)
-
-
+/* ======================
+UI
+====================== */
 
 return(
 
@@ -358,8 +454,8 @@ onChange={e=>setAlias(e.target.value)}
 />
 
 <button
-onClick={save}
 className="bg-green-600 px-4 py-2 rounded"
+onClick={saveSettings}
 >
 Save
 </button>
@@ -372,7 +468,9 @@ Save
 
 <div className="bg-slate-800 p-4 rounded mb-4">
 
-<h2 className="font-bold mb-2">Case Context</h2>
+<h2 className="font-bold mb-2">
+Case Context
+</h2>
 
 <textarea
 rows="8"
@@ -385,49 +483,27 @@ onChange={e=>setContext(e.target.value)}
 
 
 
-<div className="bg-slate-700 p-3 rounded mb-4">
-
-<h3 className="font-bold">Stripe Product Detected</h3>
-<p>{product}</p>
-
-</div>
-
-
-
-{ids.length>0 &&(
-
-<div className="bg-slate-700 p-3 rounded mb-4">
-
-<h3 className="font-bold">Detected Stripe IDs</h3>
-
-<pre>{ids.join("\n")}</pre>
-
-</div>
-
-)}
-
-
-
 <div className="flex gap-3 mb-4 flex-wrap">
 
-<button onClick={()=>generate("EMAIL")} className="bg-purple-600 px-4 py-2 rounded">
+<button
+className="bg-purple-600 px-4 py-2 rounded"
+onClick={()=>generate("EMAIL")}
+>
 Email Draft
 </button>
 
-<button onClick={()=>generate("CHAT")} className="bg-blue-600 px-4 py-2 rounded">
+<button
+className="bg-blue-600 px-4 py-2 rounded"
+onClick={()=>generate("CHAT")}
+>
 Chat/RAC Notes
 </button>
 
-<button onClick={()=>generate("INVESTIGATION")} className="bg-orange-600 px-4 py-2 rounded">
+<button
+className="bg-orange-600 px-4 py-2 rounded"
+onClick={()=>generate("INVESTIGATION")}
+>
 Investigation Notes
-</button>
-
-<button onClick={()=>generate("SUMMARY")} className="bg-yellow-600 px-4 py-2 rounded">
-Quick Summary
-</button>
-
-<button onClick={()=>generate("CONSULT")} className="bg-green-600 px-4 py-2 rounded">
-Consult
 </button>
 
 </div>
@@ -436,13 +512,23 @@ Consult
 
 <div className="bg-slate-800 p-4 rounded">
 
-<h2 className="font-bold mb-2">Generated Output</h2>
+<h2 className="font-bold mb-2">
+Generated Output
+</h2>
 
 {loading && <p>Generating...</p>}
 
-<pre className="bg-white text-black p-3 rounded whitespace-pre-wrap">
-{output}
-</pre>
+<button
+className="bg-gray-700 px-3 py-1 rounded mb-3"
+onClick={()=>navigator.clipboard.writeText(output)}
+>
+Copy Markdown
+</button>
+
+<div
+className="bg-white text-black p-4 rounded prose max-w-none"
+dangerouslySetInnerHTML={{__html:marked.parse(output||"")}}
+></div>
 
 </div>
 
@@ -461,4 +547,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>)
 </script>
 
 </body>
+
 </html>
